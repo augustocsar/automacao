@@ -962,13 +962,61 @@ def main():
         default=0,
         help="segundos de pausa entre envios (padrão: 0)",
     )
+    parser.add_argument(
+        "--pular",
+        default="",
+        help="linhas a ignorar, separadas por vírgula (ex.: 4,5,17)",
+    )
+    parser.add_argument(
+        "--linhas",
+        default="",
+        help="linhas exatas a processar, separadas por vírgula (ignora filtros)",
+    )
     args = parser.parse_args()
 
+    pular = {
+        int(valor)
+        for valor in (args.pular or "").split(",")
+        if valor.strip().isdigit()
+    }
+
     repeticoes = max(1, args.repeticoes)
-    if args.planilha:
+
+    linhas_forcadas = [
+        int(valor)
+        for valor in (args.linhas or "").split(",")
+        if valor.strip().isdigit()
+    ]
+
+    if args.planilha and linhas_forcadas:
+        alunos = []
+        for numero_linha in linhas_forcadas:
+            try:
+                aluno = carregar_aluno(args.planilha, numero_linha)
+            except ValueError as erro:
+                raise SystemExit(f"❌ {erro}")
+
+            if aluno["menor"]:
+                print(
+                    f"  ⚠️ Linha {numero_linha}: menor de idade "
+                    f"({aluno['idade']} anos) — incluída por --linhas"
+                )
+            if not aluno["cpf_valido"]:
+                print(
+                    f"  ⚠️ Linha {numero_linha}: CPF inválido "
+                    f"({aluno['cpf']}) — incluída por --linhas"
+                )
+            alunos.append(aluno)
+        repeticoes = len(alunos)
+    elif args.planilha:
         alunos = []
         linha_atual = args.linha
         while len(alunos) < repeticoes:
+            if linha_atual in pular:
+                print(f"  ⏭️ Linha {linha_atual} ignorada: solicitada em --pular")
+                linha_atual += 1
+                continue
+
             try:
                 aluno = carregar_aluno(args.planilha, linha_atual)
             except ValueError as erro:

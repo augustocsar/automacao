@@ -248,7 +248,7 @@ def carregar_aluno(arquivo, linha=1):
         email = padrao["email"]
 
     telefone = somente_digitos(row.get("Telefone"))
-    if not telefone:
+    if len(telefone) != 11:
         telefone = padrao["telefone"]
 
     cpf_digitos = somente_digitos(row.get("CPF"))
