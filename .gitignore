@@ -19,6 +19,10 @@ __pycache__/
 # Logs
 *.log
 
+# Diagnóstico das automações
+screenshots/
+traces/
+
 # Sistema operacional
 .DS_Store
 Thumbs.db

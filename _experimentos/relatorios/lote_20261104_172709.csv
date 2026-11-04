@@ -1,0 +1,11 @@
+﻿indice;run_id;aluno;email;curso;turno;ok;duracao_s;log
+1;p01_20261104_172709;Rafael Oliveira;rafaeloliveira1306@gmail.com;Estética e Cosmética;Matutino;OK;33.7;p01_20261104_172709.log
+2;p02_20261104_172709;Otavio Martins;otaviomartins5415@gmail.com;Odontologia;Noturno;OK;32.7;p02_20261104_172709.log
+3;p03_20261104_172709;Joao Pereira;joaopereira8756@gmail.com;Administração;Matutino;OK;31.2;p03_20261104_172709.log
+4;p04_20261104_172709;Carla Costa;carlacosta4633@gmail.com;Biomedicina;Noturno;OK;30.6;p04_20261104_172709.log
+5;p05_20261104_172709;Elisa Gomes;elisagomes1356@gmail.com;Psicologia;Matutino;FALHOU;42.2;p05_20261104_172709.log
+6;p06_20261104_172709;Natalia Ribeiro;nataliaribeiro5935@gmail.com;Odontologia;Noturno;FALHOU;42.7;p06_20261104_172709.log
+7;p07_20261104_172709;Diego Araujo;diegoaraujo1726@gmail.com;Psicologia;Noturno;FALHOU;45.2;p07_20261104_172709.log
+8;p08_20261104_172709;Joao Souza;joaosouza7589@gmail.com;Administração;Noturno;FALHOU;51.2;p08_20261104_172709.log
+9;p09_20261104_172709;Tiago Cardoso;tiagocardoso8751@gmail.com;Terapia Ocupacional;Noturno;FALHOU;41.6;p09_20261104_172709.log
+10;p10_20261104_172709;Marcos Almeida;marcosalmeida9274@gmail.com;Medicina Veterinária;Matutino;FALHOU;41.1;p10_20261104_172709.log

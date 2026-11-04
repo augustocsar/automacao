@@ -2,7 +2,7 @@
 import re
 
 def testar_leitura_planilha():
-    nome_arquivo = "Base_Alunos_Prontos_para_Automacao_Final.xlsx"
+    nome_arquivo = "Base_Alunos_17_Cursos_Finais.xlsx"
     print(f"Lendo os dados de: {nome_arquivo}...\n")
     
     try:
