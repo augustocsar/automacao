@@ -13,6 +13,8 @@ from playwright.sync_api import (
     expect,
 )
 
+from planilha import carregar_aluno
+
 # Console do Windows costuma engasgar com emoji quando a saída é redirecionada.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -468,6 +470,32 @@ def escolher_pagar_depois(page):
             print("     ⚠️ o rádio de 'Pagar depois' não ficou marcado")
 
 
+def preencher_responsavel_financeiro(page, dados):
+    """Preenche a seção de responsável financeiro quando ela é exigida.
+
+    Costuma aparecer quando o aluno é menor de idade. Usa os dados do
+    responsável quando a planilha traz; o que faltar cai nos dados do aluno.
+    """
+    nome_campo = page.locator(".mx-name-txt_Financeiro_Nome input")
+    cpf_campo = page.locator(".mx-name-txt_Financeiro_CPF input")
+    nasc_campo = page.locator(".mx-name-txt_Financeiro_DataNascimento input")
+
+    if nome_campo.count() == 0 or not nome_campo.first.is_visible():
+        print("     sem seção de responsável financeiro")
+        return False
+
+    responsavel = dados.get("responsavel") or {}
+    nome = responsavel.get("nome") or dados["nome"]
+    cpf = responsavel.get("cpf") or dados["cpf_digitos"]
+    nasc = responsavel.get("nasc") or dados["nascimento"]
+
+    preencher(nome_campo.first, nome, "responsável nome")
+    preencher_mascarado(cpf_campo.first, re.sub(r"\D", "", cpf), "responsável CPF")
+    preencher_data_nascimento(nasc_campo.first, nasc)
+    print("     responsável financeiro preenchido")
+    return True
+
+
 def fechar_popup_entendi(page):
     botao = page.get_by_role("button", name="Entendi")
     try:
@@ -621,10 +649,28 @@ def esperar_checkout(context, page):
 # =======================================================
 # FLUXO PRINCIPAL
 # =======================================================
-def testar_curso_randomico(run_id):
-    curso = random.choice(CURSOS)
-    turno_sorteado = random.choice(TURNOS)
-    dados = gerar_dados()
+def testar_curso_randomico(run_id, aluno=None):
+    if aluno:
+        curso = aluno["curso"]
+        turno_sorteado = aluno["turno"]
+        dados = {
+            chave: aluno[chave]
+            for chave in (
+                "nome",
+                "email",
+                "telefone",
+                "cpf",
+                "cpf_digitos",
+                "nascimento",
+                "cep",
+                "numero",
+                "responsavel",
+            )
+        }
+    else:
+        curso = random.choice(CURSOS)
+        turno_sorteado = random.choice(TURNOS)
+        dados = gerar_dados()
 
     resultado = {
         "run_id": run_id,
@@ -764,6 +810,9 @@ def testar_curso_randomico(run_id):
                 )
                 preencher_data_nascimento(campo_nasc, dados["nascimento"])
 
+            with passo(page, "Checkout: responsável financeiro", run_id):
+                preencher_responsavel_financeiro(page, dados)
+
             with passo(page, "Checkout: CEP e número", run_id):
                 logradouro = page.locator(".mx-name-txt_Endereco_Logradouro input")
                 outros = [c for c in LISTA_CEPS if c != dados["cep"]]
@@ -835,19 +884,66 @@ def testar_curso_randomico(run_id):
 
 
 def main():
-    repeticoes = 1
-    if len(sys.argv) > 1:
-        try:
-            repeticoes = max(1, int(sys.argv[1]))
-        except ValueError:
-            print("Uso: python teste_fluxo.py [quantidade_de_rodadas]")
-            sys.exit(2)
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Inscreve alunos no site (dados aleatórios ou de uma planilha)"
+    )
+    parser.add_argument(
+        "repeticoes",
+        nargs="?",
+        type=int,
+        default=1,
+        help="quantidade de rodadas (padrão: 1)",
+    )
+    parser.add_argument(
+        "--planilha",
+        "-p",
+        help="arquivo .xlsx de onde ler os dados dos alunos",
+    )
+    parser.add_argument(
+        "--linha",
+        "-l",
+        type=int,
+        default=1,
+        help="primeira linha de dados a usar (padrão: 1)",
+    )
+    args = parser.parse_args()
+
+    repeticoes = max(1, args.repeticoes)
+    if args.planilha:
+        alunos = []
+        linha_atual = args.linha
+        while len(alunos) < repeticoes:
+            try:
+                aluno = carregar_aluno(args.planilha, linha_atual)
+            except ValueError as erro:
+                raise SystemExit(
+                    f"❌ {erro} — não há linhas válidas suficientes"
+                )
+
+            if aluno["menor"]:
+                print(
+                    f"  ⏭️ Linha {linha_atual} ignorada: menor de idade "
+                    f"({aluno['idade']} anos)"
+                )
+            elif not aluno["cpf_valido"]:
+                print(
+                    f"  ⏭️ Linha {linha_atual} ignorada: CPF inválido "
+                    f"({aluno['cpf']})"
+                )
+            else:
+                alunos.append(aluno)
+
+            linha_atual += 1
+    else:
+        alunos = [None] * repeticoes
 
     resultados = []
-    for indice in range(1, repeticoes + 1):
+    for indice, aluno in enumerate(alunos, start=1):
         run_id = f"r{indice}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         print(f"\n{'=' * 60}\nRODADA {indice}/{repeticoes}  (id: {run_id})\n{'=' * 60}")
-        resultados.append(testar_curso_randomico(run_id))
+        resultados.append(testar_curso_randomico(run_id, aluno))
 
     print(f"\n{'=' * 60}\nRESUMO\n{'=' * 60}")
     for item in resultados:
