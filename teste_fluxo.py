@@ -1,9 +1,10 @@
+import csv
 import re
 import sys
 import time
 import random
 import traceback
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -72,6 +73,8 @@ POLO_ALVO = "ARACAJU"
 
 PASTA_SHOTS = Path("screenshots")
 PASTA_TRACES = Path("traces")
+PASTA_LOGS = Path("logs")
+PASTA_RELATORIOS = Path("relatorios")
 
 
 # =======================================================
@@ -674,6 +677,7 @@ def testar_curso_randomico(run_id, aluno=None):
 
     resultado = {
         "run_id": run_id,
+        "linha": (aluno or {}).get("linha"),
         "curso": curso,
         "turno_sorteado": turno_sorteado,
         "turno_usado": None,
@@ -883,6 +887,44 @@ def testar_curso_randomico(run_id, aluno=None):
     return resultado
 
 
+def salvar_relatorio(resultados, carimbo):
+    PASTA_RELATORIOS.mkdir(exist_ok=True)
+    destino = PASTA_RELATORIOS / f"inscricoes_{carimbo}.csv"
+
+    with open(destino, "w", newline="", encoding="utf-8-sig") as arquivo:
+        escritor = csv.writer(arquivo, delimiter=";")
+        escritor.writerow(
+            [
+                "linha",
+                "run_id",
+                "nome",
+                "cpf",
+                "email",
+                "curso",
+                "turno",
+                "status",
+                "motivo",
+            ]
+        )
+        for item in resultados:
+            dados = item.get("dados") or {}
+            escritor.writerow(
+                [
+                    item.get("linha") or "",
+                    item["run_id"],
+                    dados.get("nome", ""),
+                    dados.get("cpf", ""),
+                    dados.get("email", ""),
+                    item["curso"],
+                    item.get("turno_usado") or item["turno_sorteado"],
+                    "OK" if item["ok"] else "FALHOU",
+                    item.get("motivo", ""),
+                ]
+            )
+
+    return destino
+
+
 def main():
     import argparse
 
@@ -907,6 +949,18 @@ def main():
         type=int,
         default=1,
         help="primeira linha de dados a usar (padrão: 1)",
+    )
+    parser.add_argument(
+        "--silencioso",
+        "-s",
+        action="store_true",
+        help="grava o log detalhado em logs/ e imprime só um resumo por aluno",
+    )
+    parser.add_argument(
+        "--intervalo",
+        type=float,
+        default=0,
+        help="segundos de pausa entre envios (padrão: 0)",
     )
     args = parser.parse_args()
 
@@ -939,28 +993,67 @@ def main():
     else:
         alunos = [None] * repeticoes
 
+    carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
     resultados = []
     for indice, aluno in enumerate(alunos, start=1):
         run_id = f"r{indice}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        print(f"\n{'=' * 60}\nRODADA {indice}/{repeticoes}  (id: {run_id})\n{'=' * 60}")
-        resultados.append(testar_curso_randomico(run_id, aluno))
 
-    print(f"\n{'=' * 60}\nRESUMO\n{'=' * 60}")
-    for item in resultados:
-        status = "✅ OK" if item["ok"] else "❌ FALHOU"
-        print(
-            f"  {status} | {item['curso']} ({item['turno_usado'] or item['turno_sorteado']})"
-            f" | id: {item['run_id']}"
-        )
-        dados = item.get("dados") or {}
-        if dados:
-            print(f"         aluno: {dados.get('nome')} | {dados.get('email')}")
-        if item["motivo"]:
-            print(f"         motivo: {item['motivo']}")
+        if args.silencioso:
+            PASTA_LOGS.mkdir(exist_ok=True)
+            caminho_log = PASTA_LOGS / f"{run_id}.log"
+            with open(caminho_log, "w", encoding="utf-8", errors="replace") as arquivo:
+                with redirect_stdout(arquivo), redirect_stderr(arquivo):
+                    resultado = testar_curso_randomico(run_id, aluno)
+        else:
+            print(
+                f"\n{'=' * 60}\nRODADA {indice}/{repeticoes}  (id: {run_id})\n{'=' * 60}"
+            )
+            resultado = testar_curso_randomico(run_id, aluno)
 
+        resultados.append(resultado)
+
+        if args.silencioso:
+            dados = resultado.get("dados") or {}
+            marca = "OK" if resultado["ok"] else "FALHOU"
+            turno = resultado.get("turno_usado") or resultado["turno_sorteado"]
+            linha = resultado.get("linha") or "-"
+            print(
+                f"  [{indice}/{repeticoes}] {marca} | linha {linha} "
+                f"| {dados.get('nome', '-')} | {resultado['curso']} ({turno})"
+            )
+            if resultado.get("motivo"):
+                print(f"      motivo: {resultado['motivo']}")
+
+        if args.intervalo > 0 and indice < len(alunos):
+            print(f"  ... aguardando {args.intervalo:.0f}s")
+            time.sleep(args.intervalo)
+
+    destino = salvar_relatorio(resultados, carimbo)
     total_ok = sum(1 for item in resultados if item["ok"])
-    print(f"\n  Sucesso: {total_ok}/{len(resultados)}")
-    print("\n🔥 Teste ponta a ponta finalizado!")
+
+    if args.silencioso:
+        print(f"\nRESUMO: {total_ok}/{len(resultados)} enviados")
+        print(f"Relatório: {destino}")
+    else:
+        print(f"\n{'=' * 60}\nRESUMO\n{'=' * 60}")
+        for item in resultados:
+            status = "✅ OK" if item["ok"] else "❌ FALHOU"
+            linha = item.get("linha")
+            prefixo = f"linha {linha} | " if linha else ""
+            print(
+                f"  {status} | {prefixo}{item['curso']} "
+                f"({item['turno_usado'] or item['turno_sorteado']})"
+                f" | id: {item['run_id']}"
+            )
+            dados = item.get("dados") or {}
+            if dados:
+                print(f"         aluno: {dados.get('nome')} | {dados.get('email')}")
+            if item["motivo"]:
+                print(f"         motivo: {item['motivo']}")
+
+        print(f"\n  Sucesso: {total_ok}/{len(resultados)}")
+        print(f"  Relatório: {destino}")
+        print("\n🔥 Teste ponta a ponta finalizado!")
 
     sys.exit(0 if total_ok == len(resultados) else 1)
 

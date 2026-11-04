@@ -287,6 +287,7 @@ def carregar_aluno(arquivo, linha=1):
     idade = calcular_idade(nascimento)
 
     return {
+        "linha": linha,
         "nome": nome,
         "email": email,
         "telefone": telefone,
